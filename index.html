@@ -76,8 +76,11 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
         <div class="card metric"><div class="label">Belastingmonitor</div><div class="value" id="mTax">€ 0,00</div><small id="taxSmall">Geschatte reservering tot nu toe</small></div>
         <div class="card metric"><div class="label">Persoonlijke potjes</div><div class="value" id="mReserves">€ 0,00</div><small>Vakantie · AOV · pensioen · lesauto</small></div>
         <div class="card metric"><div class="label">Privé opgenomen dit jaar</div><div class="value" id="mWithdrawals">€ 0,00</div><small>Geen bedrijfskosten</small></div>
-        <div class="card metric"><div class="label">Actueel banksaldo</div><div class="value"><input id="bankBalance" inputmode="decimal" placeholder="0,00" onchange="saveBankBalance()" style="font:inherit;font-weight:800;width:100%;max-width:180px;padding:6px 8px"></div><small>Tel je zakelijke rekeningen samen op</small></div>
-        <div class="card metric"><div class="label">Vrij banksaldo</div><div class="value" id="mFreeBank">€ 0,00</div><small id="freeBankSmall">Banksaldo minus belastingadvies en openstaande btw</small></div>
+        <div class="card metric"><div class="label">Berekende betaalrekening</div><div class="value" id="mBankCalculated">€ 0,00</div><small id="bankCalculatedSmall">Vanaf je ingestelde beginsaldo</small></div>
+        <div class="card metric"><div class="label">BTW-potje gewenst</div><div class="value" id="mVatPot">€ 0,00</div><small id="vatPotSmall">Wat er volgens DriveFinance in je btw-potje hoort te staan</small></div>
+        <div class="card metric"><div class="label">IB-potje gewenst</div><div class="value" id="mTaxPot">€ 0,00</div><small id="taxPotSmall">Op basis van de belastingmonitor</small></div>
+        <div class="card metric"><div class="label">CBR-reservering nodig</div><div class="value" id="mCbrPot">€ 0,00</div><small id="cbrPotSmall">TTT en praktijkexamen · € 143,50 per reservering · btw-vrij</small></div>
+        <div class="card metric"><div class="label">Vrij banksaldo</div><div class="value" id="mFreeBank">€ 0,00</div><small id="freeBankSmall">Na benodigde belastingpotjes en persoonlijke reserveringen</small></div>
         <div class="card metric kpi-wide"><div class="label">Indicatief nog beschikbaar</div><div class="value" id="mAvailable">€ 0,00</div><small>Jaarresultaat minus belastingadvies, openstaande btw, persoonlijke potjes en reeds opgenomen privébedragen</small></div>
         <div class="card metric kpi-wide"><div class="label">Prognose heel jaar</div><div class="value" id="mForecastProfit">€ 0,00</div><small id="forecastSmall">Schatting op basis van werkelijke cijfers t/m vandaag</small></div>
       </div>
@@ -238,7 +241,29 @@ button,input,select,textarea{font:inherit} button{cursor:pointer}
         </div>
       </div>
       <div class="form-card">
-        <h3 style="margin-top:0">💾 Back-up</h3><div class="calcbox" style="margin-bottom:12px"><strong>Samsung-telefoonversie</strong><br>Jouw bestaande back-up is al ingebouwd. Bij een lege installatie worden de gegevens automatisch geladen.</div>
+        <h3 style="margin-top:0">🏦 Bank & belastingpotjes</h3>
+        <p class="muted">Vul één keer de echte saldi van je bank in. Vanaf deze begindatum rekent DriveFinance nieuwe inkomsten, kosten en privé-opnames automatisch door.</p>
+        <div class="form-grid">
+          <div class="field"><label>Begindatum</label><input id="bankStartDate" type="date"></div>
+          <div class="field"><label>Betaalrekening beginsaldo</label><input id="bankStartMain" inputmode="decimal" placeholder="4079,93"></div>
+          <div class="field"><label>BTW-potje beginsaldo</label><input id="bankStartVat" inputmode="decimal" placeholder="1352,40"></div>
+          <div class="field"><label>IB-potje beginsaldo</label><input id="bankStartTax" inputmode="decimal" placeholder="3034,96"></div>
+          <div class="field"><label>CBR-potje beginsaldo</label><input id="bankStartCbr" inputmode="decimal" placeholder="0,00"></div>
+          <div class="field full"><button class="btn primary" onclick="saveBankPots()">Beginsaldi opslaan</button></div>
+          <div class="field full">
+            <label>CBR reserveringen</label>
+            <div class="actions">
+              <button class="btn" type="button" onclick="changeCbrReserve(143.50)">+ TTT € 143,50</button>
+              <button class="btn" type="button" onclick="changeCbrReserve(143.50)">+ Praktijk € 143,50</button>
+              <button class="btn danger" type="button" onclick="changeCbrReserve(-143.50)">− CBR-reservering € 143,50</button>
+            </div>
+            <div class="hint" id="cbrReserveHint" style="margin-top:8px">Geen CBR-reservering.</div>
+          </div>
+        </div>
+        <div class="hint" id="bankPotsHint" style="margin-top:12px">Nog geen beginsaldi ingesteld.</div>
+      </div>
+      <div class="form-card">
+        <h3 style="margin-top:0">💾 Back-up</h3><div class="calcbox" style="margin-bottom:12px"><strong>Extra veiligheid</strong><br>Je gegevens worden lokaal opgeslagen en automatisch met Supabase gesynchroniseerd.</div>
         <p class="muted">Maak regelmatig een back-up van alle gegevens. De back-up is een JSON-bestand.</p>
         <div class="actions">
           <button class="btn primary" onclick="exportBackup()">Back-up maken</button>
@@ -372,6 +397,8 @@ function migrateData(){
   if(db.settings.year==null)db.settings.year=new Date().getFullYear();
   if(db.settings.hoursCriterion==null)db.settings.hoursCriterion=true;
   if(db.settings.taxPaid==null)db.settings.taxPaid=0;
+  if(!db.settings.bankPots)db.settings.bankPots={startDate:'',main:0,vat:0,tax:0,cbr:0,cbrStart:0};
+  db.settings.bankPots=Object.assign({startDate:'',main:0,vat:0,tax:0,cbr:0,cbrStart:Number(db.settings.bankPots?.cbrStart ?? db.settings.bankPots?.cbr ?? 0)||0},db.settings.bankPots);
   if(!db.settings.quarterVat)db.settings.quarterVat={};
   if(!db.settings.auto)db.settings.auto={lease:0,leaseVat:0,insurance:0,roadTax:0,startMonth:db.settings.year+'-01',mode:'show'};
   db.settings.auto=Object.assign({lease:0,leaseVat:0,insurance:0,roadTax:0,startMonth:db.settings.year+'-01',mode:'show'},db.settings.auto);
@@ -496,12 +523,58 @@ function forecastTotalsForRange(start,end){
   return{school,rental,revenue:round2(school+rental),costs,profit:round2(school+rental-costs),vatOut,vatIn,vat:round2(vatOut-vatIn)};
 }
 
-function saveBankBalance(){
-  const el=document.getElementById('bankBalance');
-  db.settings.bankBalance=Math.max(0,parseMoney(el?.value||0));
-  persist();renderDashboard();
+function bankMovementSinceStart(){
+  const p=db.settings.bankPots||{}, start=p.startDate||'';
+  if(!start)return{income:0,expenses:0,withdrawals:0,main:Number(p.main)||0};
+  const invoiceIncome=(db.invoices||[]).filter(x=>x.date>start).reduce((s,x)=>s+(Number(x.total)||0),0);
+  const rentalIncome=(db.rentals||[]).filter(x=>x.date>start).reduce((s,x)=>s+(Number(x.total)||0),0);
+  const income=round2(invoiceIncome+rentalIncome);
+  const expenses=round2((db.expenses||[]).filter(x=>x.date>start).reduce((s,x)=>s+(Number(x.total)||0),0));
+  const withdrawals=round2((db.withdrawals||[]).filter(x=>x.date>start).reduce((s,x)=>s+(Number(x.amount)||0),0));
+  return{income,expenses,withdrawals,main:round2((Number(p.main)||0)+income-expenses-withdrawals)};
 }
-
+function currentRequiredPots(){
+  const p=db.settings.bankPots||{}, y=Number(db.settings.year)||new Date().getFullYear(), now=new Date();
+  const q=Math.floor(now.getMonth()/3)+1, sm=(q-1)*3+1, em=q*3;
+  const qt=actualTotalsForRange(`${y}-${String(sm).padStart(2,'0')}-01`,`${y}-${String(em).padStart(2,'0')}-${new Date(y,em,0).getDate()}`);
+  const qKey=`${y}-Q${q}`, status=(db.settings.quarterVat||{})[qKey]||{};
+  const vatNeed=status.paid?0:Math.max(0,qt.vat);
+  const tax=calculateTaxMonitor(y);
+  return{vat:round2(vatNeed),tax:round2(tax.valid?tax.reserveNow:0)};
+}
+function saveBankPots(){
+  const date=document.getElementById('bankStartDate')?.value;
+  if(!date){toast('Vul eerst een begindatum in.');return}
+  db.settings.bankPots={
+    startDate:date,
+    main:Math.max(0,parseMoney(document.getElementById('bankStartMain')?.value||0)),
+    vat:Math.max(0,parseMoney(document.getElementById('bankStartVat')?.value||0)),
+    tax:Math.max(0,parseMoney(document.getElementById('bankStartTax')?.value||0)),
+    cbr:Math.max(0,parseMoney(document.getElementById('bankStartCbr')?.value||0)),
+    cbrStart:Math.max(0,parseMoney(document.getElementById('bankStartCbr')?.value||0))
+  };
+  addActivity('Beginsaldi bank en belastingpotjes ingesteld');
+  persist();renderAll();toast('Beginsaldi opgeslagen.');
+}
+function changeCbrReserve(delta){
+  const p=db.settings.bankPots||{};
+  if(!p.startDate){toast('Stel eerst je beginsaldi in.');return}
+  p.cbr=round2(Math.max(0,(Number(p.cbr)||0)+Number(delta||0)));
+  db.settings.bankPots=p;
+  addActivity(delta>0?'CBR-reservering € 143,50 toegevoegd':'CBR-reservering € 143,50 verwijderd');
+  persist();renderAll();toast(delta>0?'CBR-reservering toegevoegd.':'CBR-reservering verwijderd.');
+}
+function renderBankPotsSettings(){
+  const p=db.settings.bankPots||{};
+  const vals=[['bankStartDate',p.startDate||''],['bankStartMain',p.main||0],['bankStartVat',p.vat||0],['bankStartTax',p.tax||0],['bankStartCbr',p.cbr||0]];
+  vals.forEach(([id,v])=>{const el=document.getElementById(id);if(!el||document.activeElement===el)return;el.value=id==='bankStartDate'?v:(Number(v)?Number(v).toFixed(2).replace('.',','):'')});
+  const cbrHint=document.getElementById('cbrReserveHint');
+  if(cbrHint)cbrHint.innerHTML=`Huidige CBR-reservering: <strong>${money(p.cbr||0)}</strong> · btw-vrij.`;
+  const hint=document.getElementById('bankPotsHint');if(!hint)return;
+  if(!p.startDate){hint.textContent='Nog geen beginsaldi ingesteld.';return}
+  const mv=bankMovementSinceStart(), need=currentRequiredPots();
+  hint.innerHTML=`Sinds ${new Date(p.startDate+'T12:00').toLocaleDateString('nl-NL')}: inkomsten <strong>${money(mv.income)}</strong> · uitgaven <strong>${money(mv.expenses)}</strong> · privé <strong>${money(mv.withdrawals)}</strong>.<br>Advies nu: BTW-potje <strong>${money(need.vat)}</strong> · IB-potje <strong>${money(need.tax)}</strong>.`;
+}
 function renderDashboard(){
   const now=new Date();
   const selectedYear=Number(document.getElementById('dashboardYear')?.value||db.settings.year||now.getFullYear());
@@ -540,16 +613,25 @@ function renderDashboard(){
   document.getElementById('mReserves').textContent=money(reserves);
   const withdrawalsYear=db.withdrawals.filter(x=>x.date?.startsWith(String(selectedYear))).reduce((sum,x)=>sum+(Number(x.amount)||0),0);
   document.getElementById('mWithdrawals').textContent=money(withdrawalsYear);
-  const bankBalance=Number(db.settings.bankBalance)||0;
-  const bankInput=document.getElementById('bankBalance');if(bankInput&&document.activeElement!==bankInput)bankInput.value=bankBalance?bankBalance.toFixed(2).replace('.',','):'';
-  // Reserveer de btw van het huidige kwartaal zolang de aangifte nog niet als betaald is gemarkeerd.
-  // Een negatief btw-saldo (teruggaaf) verhoogt 'beschikbaar' niet vooruitlopend op ontvangst.
+  const bankPots=db.settings.bankPots||{}, bankMove=bankMovementSinceStart();
   const quarterKey=`${selectedYear}-Q${effectiveQuarter}`;
   const quarterVatStatus=db.settings.quarterVat[quarterKey]||{};
   const openVatReserve=quarterVatStatus.paid?0:Math.max(0,qt.vat);
-  const freeBank=bankBalance-(tax.valid?tax.reserveNow:0)-openVatReserve-reserves;
-  document.getElementById('mFreeBank').textContent=money(freeBank);
-  document.getElementById('freeBankSmall').textContent=`Banksaldo - belasting ${money(tax.valid?tax.reserveNow:0)} - btw ${money(openVatReserve)}${reserves?` - potjes ${money(reserves)}`:''}`;
+  const requiredTax=tax.valid?tax.reserveNow:0;
+  const startTotal=(Number(bankPots.main)||0)+(Number(bankPots.vat)||0)+(Number(bankPots.tax)||0)+(Number(bankPots.cbrStart)||0);
+  const totalBusiness=round2(startTotal+bankMove.income-bankMove.expenses-bankMove.withdrawals);
+  const cbrReserve=Number(bankPots.cbr)||0;
+  const freeBank=round2(totalBusiness-requiredTax-openVatReserve-cbrReserve-reserves);
+  document.getElementById('mBankCalculated').textContent=bankPots.startDate?money(bankMove.main):'Niet ingesteld';
+  document.getElementById('bankCalculatedSmall').textContent=bankPots.startDate?`Beginsaldo ${money(bankPots.main)} · + inkomsten ${money(bankMove.income)} · - uitgaven ${money(bankMove.expenses)} · - privé ${money(bankMove.withdrawals)}`:'Stel eerst je beginsaldi in bij Instellingen';
+  document.getElementById('mVatPot').textContent=money(openVatReserve);
+  document.getElementById('vatPotSmall').textContent=`Werkelijk beginsaldo ${money(bankPots.vat||0)} · verschil ${money(openVatReserve-(Number(bankPots.vat)||0))}`;
+  document.getElementById('mTaxPot').textContent=money(requiredTax);
+  document.getElementById('mCbrPot').textContent=money(cbrReserve);
+  document.getElementById('cbrPotSmall').textContent=`${money(cbrReserve)} gereserveerd · € 143,50 per TTT/praktijk · btw-vrij`;
+  document.getElementById('taxPotSmall').textContent=`Werkelijk beginsaldo ${money(bankPots.tax||0)} · verschil ${money(requiredTax-(Number(bankPots.tax)||0))}`;
+  document.getElementById('mFreeBank').textContent=bankPots.startDate?money(freeBank):'Niet ingesteld';
+  document.getElementById('freeBankSmall').textContent=bankPots.startDate?`Totaal zakelijk ${money(totalBusiness)} - IB ${money(requiredTax)} - btw ${money(openVatReserve)} - CBR ${money(cbrReserve)}${reserves?` - persoonlijke potjes ${money(reserves)}`:''}`:'Stel eerst je beginsaldi in';
   document.getElementById('mAvailable').textContent=money(yr.profit-(tax.valid?tax.reserveNow:0)-openVatReserve-reserves-withdrawalsYear);
   const fc=forecastForYear(selectedYear);
   document.getElementById('mForecastProfit').textContent=money(fc.profit);
@@ -875,7 +957,7 @@ function renderWithdrawals(){
 
 function deleteEntry(arr,id,label){if(!confirm(`Weet je zeker dat je ${label} wilt verwijderen?`))return;db[arr]=db[arr].filter(x=>x.id!==id);addActivity(`${label} verwijderd`);persist();renderAll();toast('Verwijderd.')}
 function saveSettings(){db.settings.name=document.getElementById('settingName').value.trim()||'Max';db.settings.year=Number(document.getElementById('settingYear').value)||new Date().getFullYear();addActivity('Instellingen bijgewerkt');persist();fillYears();renderAll();toast('Instellingen opgeslagen.')}
-function renderSettings(){document.getElementById('settingName').value=db.settings.name;document.getElementById('settingYear').value=db.settings.year}
+function renderSettings(){document.getElementById('settingName').value=db.settings.name;document.getElementById('settingYear').value=db.settings.year;renderBankPotsSettings()}
 function exportBackup(){
   db.lastBackup=new Date().toISOString();addActivity('Back-up gemaakt');persist();
   const payload={backupVersion:1,app:'DriveFinance',createdAt:new Date().toISOString(),data:db};
